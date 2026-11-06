@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   X,
   Mail,
@@ -11,7 +11,11 @@ import {
   Flame,
   Bookmark,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Download,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -44,7 +48,50 @@ export default function AuthModal({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(DEFAULT_AVATARS[0]);
+  const [customAvatarUploaded, setCustomAvatarUploaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setError('حجم الصورة كبير جداً (أقصى حد 8 ميجابايت)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        const base64 = event.target.result;
+        setSelectedAvatar(base64);
+        setCustomAvatarUploaded(true);
+        setError(null);
+        setToastMessage('تم تحميل صورتك الشخصية من معرض الهاتف بنجاح ✓');
+        setTimeout(() => setToastMessage(null), 3000);
+
+        if (currentUser) {
+          const updatedUser: UserProfile = { ...currentUser, avatar: base64 };
+          onLogin(updatedUser);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownloadAvatar = () => {
+    const imgUrl = currentUser?.avatar || selectedAvatar;
+    const a = document.createElement('a');
+    a.href = imgUrl;
+    a.download = `sajada-bessafi-profile-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setToastMessage('تم تنزيل صورتك الشخصية إلى جهازك 📥');
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,19 +175,63 @@ export default function AuthModal({
 
         {/* LOGGED-IN PROFILE VIEW */}
         {currentUser ? (
-          <div className="space-y-6 pt-2">
+          <div className="space-y-5 pt-2">
+            {toastMessage && (
+              <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-xs text-center font-medium">
+                {toastMessage}
+              </div>
+            )}
+
             <div className="text-center">
-              <div className="relative inline-block">
+              <div className="relative inline-block group">
                 <img
                   src={currentUser.avatar}
                   alt={currentUser.name}
-                  className="w-20 h-20 rounded-full object-cover border-4 border-emerald-500 mx-auto shadow-md"
+                  className="w-22 h-22 rounded-full object-cover border-4 border-emerald-500 mx-auto shadow-md"
                 />
                 {currentUser.isVerified && (
                   <span className="absolute bottom-0 right-0 bg-emerald-600 text-white p-1 rounded-full ring-2 ring-white dark:ring-stone-900">
-                    <Check className="w-3 h-3 stroke-[3]" />
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
                   </span>
                 )}
+                {/* Quick change photo badge on avatar */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer"
+                  title="تغيير الصورة من المعرض"
+                >
+                  <Camera className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Upload & Download Buttons for personal photo */}
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>تغيير صورتي من المعرض</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadAvatar}
+                  className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="تنزيل صورتي الشخصية إلى معرض الهاتف"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>تنزيل الصورة</span>
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
               </div>
 
               <h3 className="text-lg font-bold font-arabic mt-3 text-stone-900 dark:text-stone-100">
@@ -247,25 +338,76 @@ export default function AuthModal({
                     />
                   </div>
 
-                  {/* Avatar Picker */}
+                  {/* Avatar Picker & Phone Gallery Upload */}
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
-                      اختر صورتك الرمزية
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        الصورة الشخصية
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>من معرض الهاتف</span>
+                      </button>
+                    </div>
+
+                    {/* Gallery upload preview box */}
+                    <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/30 mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={selectedAvatar}
+                          alt="avatar"
+                          className="w-11 h-11 rounded-full object-cover ring-2 ring-emerald-500 shadow-sm"
+                        />
+                        <div>
+                          <div className="text-xs font-semibold text-stone-900 dark:text-stone-100">
+                            {customAvatarUploaded ? 'صورتك من معرض الهاتف' : 'الصورة المختارة'}
+                          </div>
+                          <div className="text-[10px] text-stone-500 dark:text-stone-400">
+                            {customAvatarUploaded ? 'تم تجهيز صورتك الخاصة' : 'اختر أدناه أو ارفع من معرض هاتفك'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>رفع صورة</span>
+                      </button>
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </div>
+
+                    {/* Pre-made avatar choices */}
                     <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
                       {DEFAULT_AVATARS.map((av, idx) => (
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => setSelectedAvatar(av)}
-                          className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-transform active:scale-90 ${
-                            selectedAvatar === av
+                          onClick={() => {
+                            setSelectedAvatar(av);
+                            setCustomAvatarUploaded(false);
+                          }}
+                          className={`relative w-9 h-9 rounded-full overflow-hidden border-2 transition-transform active:scale-90 shrink-0 ${
+                            selectedAvatar === av && !customAvatarUploaded
                               ? 'border-emerald-500 scale-105 shadow-md'
                               : 'border-transparent opacity-70 hover:opacity-100'
                           }`}
                         >
                           <img src={av} alt="avatar" className="w-full h-full object-cover" />
-                          {selectedAvatar === av && (
+                          {selectedAvatar === av && !customAvatarUploaded && (
                             <span className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
                               <Check className="w-3.5 h-3.5 text-white" />
                             </span>

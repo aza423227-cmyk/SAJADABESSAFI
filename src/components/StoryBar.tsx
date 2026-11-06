@@ -28,8 +28,8 @@ export default function StoryBar({ stories, onSelectStory, onCreateStory }: Stor
               <Plus className="w-3 h-3 stroke-[3]" />
             </div>
           </div>
-          <span className="text-[11px] font-medium text-stone-700 dark:text-stone-300 max-w-[68px] truncate text-center">
-            Créer
+          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 max-w-[68px] truncate text-center font-arabic">
+            قصة جديدة
           </span>
         </button>
 

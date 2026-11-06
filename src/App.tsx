@@ -19,7 +19,6 @@ import PrayerWidget from './components/PrayerWidget';
 import TasbihView from './components/TasbihView';
 import QiblaModal from './components/QiblaModal';
 import CreatePostModal from './components/CreatePostModal';
-import SajdaAIModal from './components/SajdaAIModal';
 import AdhanInstagramPlayer from './components/AdhanInstagramPlayer';
 import AuthModal from './components/AuthModal';
 import DirectMessagesView from './components/DirectMessagesView';
@@ -32,6 +31,7 @@ import {
   getHijriDate,
   getStoredCity
 } from './services/prayerTimes';
+import { playRealRecitation } from './services/audioService';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('feed');
@@ -40,11 +40,15 @@ export default function App() {
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showQiblaModal, setShowQiblaModal] = useState(false);
-  const [showAIModal, setShowAIModal] = useState(false);
   const [showAdhanModal, setShowAdhanModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tous');
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  const handlePublishStory = (newStory: Story) => {
+    setStories((prev) => [newStory, ...prev]);
+    setActiveStoryIndex(0);
+  };
 
   // User authentication state (saved in localStorage)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
@@ -344,22 +348,32 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Quick AI Spiritual Companion trigger */}
-              <div className="bg-gradient-to-br from-amber-500/10 via-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-3xl p-5 shadow-sm space-y-3">
+              {/* Daily Spiritual Reflection & Quran Recitation */}
+              <div className="bg-gradient-to-br from-emerald-950/40 via-stone-900 to-teal-950/30 border border-emerald-500/30 rounded-3xl p-5 shadow-sm space-y-3">
                 <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100 font-bold text-sm">
-                  <HeartHandshake className="w-5 h-5 text-emerald-500" />
-                  <span>Un souci ou un doute sur le cœur ?</span>
+                  <Sparkles className="w-5 h-5 text-amber-400" />
+                  <span>تلاوة وذكر اليوم المبارك</span>
                 </div>
-                <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
-                  Consultez notre Compagnon SAJADA BESSAFI AI pour trouver le verset et la prière qui apaisent votre situation.
+                <p className="font-arabic text-amber-200 text-sm leading-relaxed text-center py-1">
+                  « أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ »
                 </p>
-                <button
-                  onClick={() => setShowAIModal(true)}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-transform active:scale-95"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Demander un réconfort spirituel</span>
-                </button>
+                <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed text-center">
+                  « N'est-ce point par l'évocation d'Allah que les cœurs s'apaisent ? » (Ar-Ra'd · 28)
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => playRealRecitation('/audio/surat_ash_sharh.mp3')}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <span>سورة الشرح 🎧</span>
+                  </button>
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="py-2.5 px-3 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>نشر قصة دينية 📸</span>
+                  </button>
+                </div>
               </div>
             </aside>
           </div>
@@ -451,21 +465,6 @@ export default function App() {
             )}
           </div>
         )}
-
-        {/* TAB 5: Compagnon Sajda AI */}
-        {activeTab === 'ai' && (
-          <div className="max-w-xl mx-auto space-y-6">
-            <div className="text-center mb-2">
-              <h2 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-                Guide Spirituel & Apaisement
-              </h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                Trouvez des versets, invocations et conseils adaptés à l'état de votre cœur.
-              </p>
-            </div>
-            <SajdaAIModal onClose={() => setActiveTab('feed')} />
-          </div>
-        )}
       </main>
 
       {/* 3. MODALS */}
@@ -489,18 +488,14 @@ export default function App() {
         />
       )}
 
-      {/* Create Rappel / Story Modal */}
+      {/* Create Rappel / Religious Story Modal */}
       {showCreateModal && (
         <CreatePostModal
           currentUser={currentUser}
           onClose={() => setShowCreateModal(false)}
           onPublish={handlePublishPost}
+          onPublishStory={handlePublishStory}
         />
-      )}
-
-      {/* AI Guidance Floating Modal (if opened from sidebar) */}
-      {showAIModal && (
-        <SajdaAIModal onClose={() => setShowAIModal(false)} />
       )}
 
       {/* Instagram Adhan Sound Modal */}

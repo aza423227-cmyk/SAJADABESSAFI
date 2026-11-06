@@ -15,7 +15,7 @@ import {
   Loader2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { CityLocation, PrayerTimeItem, PrayerName } from '../types';
+import { CityLocation, PrayerTimeItem, PrayerName, PrayerMinuteOffsets } from '../types';
 import {
   POPULAR_CITIES,
   CALCULATION_METHODS,
@@ -24,10 +24,14 @@ import {
   getHijriDate,
   detectUserGeolocation,
   getStoredCity,
-  saveStoredCity
+  saveStoredCity,
+  getStoredPrayerOffsets,
+  saveStoredPrayerOffsets,
+  DEFAULT_OFFSETS
 } from '../services/prayerTimes';
 import { ADHAN_VOICES, AdhanVoice } from '../services/audioService';
 import AdhanInstagramPlayer from './AdhanInstagramPlayer';
+import { Sliders, RotateCcw, Plus, Minus, Check } from 'lucide-react';
 
 interface PrayerWidgetProps {
   onOpenQibla: () => void;
@@ -37,8 +41,10 @@ export default function PrayerWidget({ onOpenQibla }: PrayerWidgetProps) {
   const [selectedCity, setSelectedCity] = useState<CityLocation>(() => {
     return getStoredCity() || POPULAR_CITIES[0];
   });
-  const [calculationMethod, setCalculationMethod] = useState<string>('uoif');
+  const [calculationMethod, setCalculationMethod] = useState<string>('algeria');
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [showMinuteCalibration, setShowMinuteCalibration] = useState(false);
+  const [minuteOffsets, setMinuteOffsets] = useState<PrayerMinuteOffsets>(() => getStoredPrayerOffsets());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
@@ -85,9 +91,25 @@ export default function PrayerWidget({ onOpenQibla }: PrayerWidgetProps) {
     }
   }, []);
 
-  const prayerTimes = calculatePrayerTimes(selectedCity, currentTime, calculationMethod);
+  const prayerTimes = calculatePrayerTimes(selectedCity, currentTime, calculationMethod, minuteOffsets);
   const countdown = getCountdownToNextPrayer(prayerTimes, currentTime);
   const hijri = getHijriDate(currentTime);
+
+  const handleUpdateOffset = (prayerKey: keyof PrayerMinuteOffsets, delta: number) => {
+    const updated = {
+      ...minuteOffsets,
+      [prayerKey]: minuteOffsets[prayerKey] + delta
+    };
+    setMinuteOffsets(updated);
+    saveStoredPrayerOffsets(updated);
+  };
+
+  const handleResetOffsets = () => {
+    setMinuteOffsets(DEFAULT_OFFSETS);
+    saveStoredPrayerOffsets(DEFAULT_OFFSETS);
+  };
+
+  const hasCustomOffsets = Object.values(minuteOffsets).some((v) => v !== 0);
 
   const handleTogglePrayer = (prayerName: PrayerName) => {
     if (prayerName === 'Sunrise') return;
@@ -243,13 +265,15 @@ export default function PrayerWidget({ onOpenQibla }: PrayerWidgetProps) {
           </button>
 
           <button
-            onClick={handleLocateMe}
-            disabled={isLocating}
+            onClick={() => setShowMinuteCalibration(true)}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-medium transition-transform active:scale-95 backdrop-blur-md"
-            title="تحديث الموقع الجغرافي"
+            title="معايرة الدقائق يدوياً لتطابق دقيقة مسجدك المحلي"
           >
-            <NavIcon className={`w-3.5 h-3.5 text-emerald-300 ${isLocating ? 'animate-spin' : ''}`} />
-            <span>تحديث GPS</span>
+            <Sliders className="w-3.5 h-3.5 text-amber-300" />
+            <span>ضبط الدقائق (±1د)</span>
+            {hasCustomOffsets && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-emerald-500/30" />
+            )}
           </button>
         </div>
       </div>
@@ -383,6 +407,103 @@ export default function PrayerWidget({ onOpenQibla }: PrayerWidgetProps) {
               onSelectVoice={(voice) => setSelectedVoice(voice)}
               onClose={() => setShowAdhanModal(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 5. Precise Minute Calibration Modal (ضبط الدقائق بدقة المسجد المحلي) */}
+      {showMinuteCalibration && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-6 shadow-2xl text-stone-900 dark:text-stone-100 my-8">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-base font-bold font-arabic">
+                  معايرة وتصحيح الدقائق بدقة
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowMinuteCalibration(false)}
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-xs text-stone-500 dark:text-stone-400 mb-4 leading-relaxed">
+              اضبط توقيت كل صلاة بزيادة أو إنقاص الدقائق بدقة لتطابق تماماً أذان مسجد حيك أو مدينتك.
+            </p>
+
+            <div className="space-y-2.5 my-4">
+              {(
+                [
+                  { key: 'Fajr', label: 'صلاة الفجر', ar: 'الفجر' },
+                  { key: 'Sunrise', label: 'شروق الشمس', ar: 'الشروق' },
+                  { key: 'Dhuhr', label: 'صلاة الظهر', ar: 'الظهر' },
+                  { key: 'Asr', label: 'صلاة العصر', ar: 'العصر' },
+                  { key: 'Maghrib', label: 'صلاة المغرب', ar: 'المغرب' },
+                  { key: 'Isha', label: 'صلاة العشاء', ar: 'العشاء' }
+                ] as const
+              ).map((item) => {
+                const currentOffset = minuteOffsets[item.key];
+                const matchedPrayer = prayerTimes.find((p) => p.name === item.key);
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60"
+                  >
+                    <div>
+                      <div className="text-xs font-bold font-arabic text-stone-900 dark:text-stone-100">
+                        {item.label}
+                      </div>
+                      <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                        الوقت الآن : {matchedPrayer?.time}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleUpdateOffset(item.key, -1)}
+                        className="w-7 h-7 rounded-lg bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 flex items-center justify-center font-bold text-stone-800 dark:text-stone-200 transition-colors cursor-pointer"
+                        title="إنقاص دقيقة"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="w-16 text-center font-mono font-bold text-xs tabular-nums text-stone-800 dark:text-stone-200">
+                        {currentOffset > 0 ? `+${currentOffset} د` : currentOffset < 0 ? `${currentOffset} د` : '0 د'}
+                      </div>
+
+                      <button
+                        onClick={() => handleUpdateOffset(item.key, 1)}
+                        className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 flex items-center justify-center font-bold text-white transition-colors cursor-pointer"
+                        title="زيادة دقيقة"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-stone-200 dark:border-stone-800">
+              <button
+                onClick={handleResetOffsets}
+                className="flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-rose-500 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إعادة ضبط (0 دقيقة)</span>
+              </button>
+
+              <button
+                onClick={() => setShowMinuteCalibration(false)}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>تأكيد وحفظ</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

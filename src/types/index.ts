@@ -64,6 +64,15 @@ export interface FeedPost {
 
 export type PrayerName = 'Fajr' | 'Sunrise' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
 
+export interface PrayerMinuteOffsets {
+  Fajr: number;
+  Sunrise: number;
+  Dhuhr: number;
+  Asr: number;
+  Maghrib: number;
+  Isha: number;
+}
+
 export interface PrayerTimeItem {
   name: PrayerName;
   labelFr: string;

@@ -1,4 +1,4 @@
-import { CityLocation, PrayerTimeItem, PrayerName } from '../types';
+import { CityLocation, PrayerTimeItem, PrayerName, PrayerMinuteOffsets } from '../types';
 
 export const POPULAR_CITIES: CityLocation[] = [
   { name: 'Paris', country: 'France', latitude: 48.8566, longitude: 2.3522, timezone: 'Europe/Paris' },
@@ -30,11 +30,13 @@ export interface CalculationMethod {
 }
 
 export const CALCULATION_METHODS: Record<string, CalculationMethod> = {
-  uoif: { id: 'uoif', name: 'France (UOIF - 12°)', fajrAngle: 12, ishaAngle: 12 },
-  mwl: { id: 'mwl', name: 'Ligue Islamique Mondiale (18° / 17°)', fajrAngle: 18, ishaAngle: 17 },
-  makkah: { id: 'makkah', name: 'Oumm al-Qoura (La Mecque 18.5°)', fajrAngle: 18.5, ishaAngle: 19, isIshaInterval: true, ishaIntervalMinutes: 90 },
-  isna: { id: 'isna', name: 'ISNA Amérique du Nord (15°)', fajrAngle: 15, ishaAngle: 15 },
-  egypt: { id: 'egypt', name: 'Autorité Égyptienne (19.5° / 17.5°)', fajrAngle: 19.5, ishaAngle: 17.5 }
+  algeria: { id: 'algeria', name: 'الجزائر - وزارة الشؤون الدينية (18° / 17°)', fajrAngle: 18, ishaAngle: 17 },
+  mwl: { id: 'mwl', name: 'رابطة العالم الإسلامي (18° / 17°)', fajrAngle: 18, ishaAngle: 17 },
+  makkah: { id: 'makkah', name: 'جامعة أم القرى - مكة المكرمة (18.5°)', fajrAngle: 18.5, ishaAngle: 19, isIshaInterval: true, ishaIntervalMinutes: 90 },
+  egypt: { id: 'egypt', name: 'الهيئة المصرية العامة للمساحة (19.5° / 17.5°)', fajrAngle: 19.5, ishaAngle: 17.5 },
+  uoif: { id: 'uoif', name: 'فرنسا وأوروبا (UOIF - 12°)', fajrAngle: 12, ishaAngle: 12 },
+  diyanet: { id: 'diyanet', name: 'رئاسة الشؤون الدينية التركية Diyanet (18° / 17°)', fajrAngle: 18, ishaAngle: 17 },
+  isna: { id: 'isna', name: 'أمريكا الشمالية (ISNA - 15°)', fajrAngle: 15, ishaAngle: 15 }
 };
 
 const d2r = (d: number) => (d * Math.PI) / 180;
@@ -77,31 +79,61 @@ function computeAsrTime(shadowFactor: number, lat: number, dec: number): number 
   return computeTime(angle, lat, dec, 'cw');
 }
 
-export function formatTimeMinutes(hoursDecimal: number): string {
-  let normalized = (hoursDecimal + 24) % 24;
-  const hours = Math.floor(normalized);
-  const minutes = Math.floor((normalized - hours) * 60);
+export function formatTimeMinutes(hoursDecimal: number, offsetMinutes: number = 0): string {
+  // Exact minute rounding without truncation drift
+  let totalMinutes = Math.round(hoursDecimal * 60) + offsetMinutes;
+  totalMinutes = (totalMinutes + 24 * 60) % (24 * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+const OFFSETS_KEY = 'sajada_prayer_minute_offsets';
+
+export const DEFAULT_OFFSETS: PrayerMinuteOffsets = {
+  Fajr: 0,
+  Sunrise: 0,
+  Dhuhr: 0,
+  Asr: 0,
+  Maghrib: 0,
+  Isha: 0
+};
+
+export function getStoredPrayerOffsets(): PrayerMinuteOffsets {
+  try {
+    const data = localStorage.getItem(OFFSETS_KEY);
+    return data ? { ...DEFAULT_OFFSETS, ...JSON.parse(data) } : DEFAULT_OFFSETS;
+  } catch {
+    return DEFAULT_OFFSETS;
+  }
+}
+
+export function saveStoredPrayerOffsets(offsets: PrayerMinuteOffsets) {
+  try {
+    localStorage.setItem(OFFSETS_KEY, JSON.stringify(offsets));
+  } catch {
+    // ignore
+  }
 }
 
 export function calculatePrayerTimes(
   city: CityLocation,
   date: Date = new Date(),
-  methodKey: string = 'uoif'
+  methodKey: string = 'uoif',
+  customOffsets?: Partial<PrayerMinuteOffsets>
 ): PrayerTimeItem[] {
   const method = CALCULATION_METHODS[methodKey] || CALCULATION_METHODS.uoif;
+  const offsets: PrayerMinuteOffsets = { ...DEFAULT_OFFSETS, ...(customOffsets || getStoredPrayerOffsets()) };
   const jd = getJulianDate(date);
   const { declination, equationOfTime } = sunPosition(jd);
 
   // Timezone offset in hours
-  // Estimate local standard timezone offset from longitude if exact timezone calculation
-  // Or use Date timezone offset
   const timezoneOffset = -date.getTimezoneOffset() / 60;
 
-  // Midday (Dhuhr)
-  const dhuhr = 12 + timezoneOffset - city.longitude / 15 - equationOfTime / 60;
+  // Midday (Dhuhr) - exact solar transit + 1 min zawal
+  const dhuhr = 12 + timezoneOffset - city.longitude / 15 - equationOfTime / 60 + 1 / 60;
   
-  // Sunrise & Sunset (angle ~ 0.8333 degrees for atmospheric refraction)
+  // Sunrise & Sunset (angle 0.8333 degrees for atmospheric refraction + sun disc)
   const sunriseOffset = computeTime(0.8333, city.latitude, declination, 'ccw');
   const sunsetOffset = computeTime(0.8333, city.latitude, declination, 'cw');
   const sunrise = dhuhr + sunriseOffset;
@@ -111,7 +143,7 @@ export function calculatePrayerTimes(
   const fajrOffset = computeTime(method.fajrAngle, city.latitude, declination, 'ccw');
   const fajr = dhuhr + fajrOffset;
 
-  // Asr (Standard: 1x shadow)
+  // Asr (Standard: 1x shadow length)
   const asrOffset = computeAsrTime(1, city.latitude, declination);
   const asr = dhuhr + asrOffset;
 
@@ -125,12 +157,12 @@ export function calculatePrayerTimes(
   }
 
   const times: PrayerTimeItem[] = [
-    { name: 'Fajr', labelFr: 'Fajr', arabicName: 'الفجر', time: formatTimeMinutes(fajr) },
-    { name: 'Sunrise', labelFr: 'Chourouq', arabicName: 'الشروق', time: formatTimeMinutes(sunrise) },
-    { name: 'Dhuhr', labelFr: 'Dhuhr', arabicName: 'الظهر', time: formatTimeMinutes(dhuhr) },
-    { name: 'Asr', labelFr: 'Asr', arabicName: 'العصر', time: formatTimeMinutes(asr) },
-    { name: 'Maghrib', labelFr: 'Maghrib', arabicName: 'المغرب', time: formatTimeMinutes(maghrib) },
-    { name: 'Isha', labelFr: 'Icha', arabicName: 'العشاء', time: formatTimeMinutes(isha) },
+    { name: 'Fajr', labelFr: 'Fajr', arabicName: 'الفجر', time: formatTimeMinutes(fajr, offsets.Fajr) },
+    { name: 'Sunrise', labelFr: 'Chourouq', arabicName: 'الشروق', time: formatTimeMinutes(sunrise, offsets.Sunrise) },
+    { name: 'Dhuhr', labelFr: 'Dhuhr', arabicName: 'الظهر', time: formatTimeMinutes(dhuhr, offsets.Dhuhr) },
+    { name: 'Asr', labelFr: 'Asr', arabicName: 'العصر', time: formatTimeMinutes(asr, offsets.Asr) },
+    { name: 'Maghrib', labelFr: 'Maghrib', arabicName: 'المغرب', time: formatTimeMinutes(maghrib, offsets.Maghrib) },
+    { name: 'Isha', labelFr: 'Icha', arabicName: 'العشاء', time: formatTimeMinutes(isha, offsets.Isha) },
   ];
 
   // Determine current and next prayer

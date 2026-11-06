@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
-export type NavTab = 'feed' | 'prayers' | 'tasbih' | 'messages' | 'bookmarks' | 'ai';
+export type NavTab = 'feed' | 'prayers' | 'tasbih' | 'messages' | 'bookmarks';
 
 interface NavigationProps {
   activeTab: NavTab;
@@ -102,14 +102,6 @@ export default function Navigation({
                   {savedCount}
                 </span>
               )}
-            </button>
-            <button
-              onClick={() => onTabChange('ai')}
-              className={`hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors whitespace-nowrap shrink-0 ${
-                activeTab === 'ai' ? 'text-emerald-600 dark:text-emerald-400 border-b-2 border-emerald-500 py-1' : ''
-              }`}
-            >
-              المرشد الذكي
             </button>
           </nav>
 

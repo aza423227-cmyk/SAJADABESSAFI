@@ -1,5 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Heart, Share2, Bookmark, Volume2, VolumeX, Pause, Play, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import {
+  X,
+  Heart,
+  Share2,
+  Bookmark,
+  Volume2,
+  VolumeX,
+  Pause,
+  Play,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Download,
+  Loader2,
+  Sparkles
+} from 'lucide-react';
 import { Story } from '../types';
 import { playSpiritualTone } from '../services/audioService';
 
@@ -23,6 +38,8 @@ export default function StoryModal({
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replySent, setReplySent] = useState(false);
   const [showHeartOverlay, setShowHeartOverlay] = useState(false);
@@ -131,6 +148,166 @@ export default function StoryModal({
     }
   };
 
+  const handleDownloadStoryImage = async () => {
+    if (!currentItem) return;
+    setIsDownloading(true);
+
+    try {
+      const width = 1080;
+      const height = 1920;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        throw new Error('Canvas not supported');
+      }
+
+      // 1. Draw Background Image or Spiritual Islamic Gradient
+      let imageLoaded = false;
+      if (currentItem.image) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = currentItem.image;
+          await new Promise((res) => {
+            img.onload = () => {
+              imageLoaded = true;
+              res(true);
+            };
+            img.onerror = () => res(false);
+            setTimeout(() => res(false), 2000);
+          });
+
+          if (imageLoaded) {
+            const scale = Math.max(width / img.width, height / img.height);
+            const x = (width / 2) - (img.width / 2) * scale;
+            const y = (height / 2) - (img.height / 2) * scale;
+            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+          }
+        } catch {
+          imageLoaded = false;
+        }
+      }
+
+      if (!imageLoaded) {
+        // Spiritual rich gradient
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, '#064e3b'); // emerald-900
+        grad.addColorStop(0.5, '#0c0a09'); // stone-950
+        grad.addColorStop(1, '#134e4a'); // teal-900
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // Dark Overlay Scrim for high-contrast typography
+      const scrim = ctx.createLinearGradient(0, 0, 0, height);
+      scrim.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+      scrim.addColorStop(0.3, 'rgba(0, 0, 0, 0.4)');
+      scrim.addColorStop(0.7, 'rgba(0, 0, 0, 0.6)');
+      scrim.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
+      ctx.fillStyle = scrim;
+      ctx.fillRect(0, 0, width, height);
+
+      // Gold Decorative Frame Border
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.5)';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(40, 40, width - 80, height - 80);
+
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(55, 55, width - 110, height - 110);
+
+      // App Wordmark & Title at Top
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 40px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText('SAJADA BESSAFI', width / 2, 170);
+
+      ctx.fillStyle = '#fef3c7';
+      ctx.font = '500 28px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(currentStory.title + ' · ' + currentStory.category, width / 2, 230);
+
+      // Arabic Calligraphy in Center
+      let currentY = 700;
+      if (currentItem.arabicText) {
+        ctx.fillStyle = '#fde68a'; // amber-200
+        ctx.font = 'bold 64px "Amiri", serif';
+        const words = currentItem.arabicText.split(' ');
+        let line = '';
+        for (let n = 0; n < words.length; n++) {
+          const testLine = line + words[n] + ' ';
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > width - 200 && n > 0) {
+            ctx.fillText(line, width / 2, currentY);
+            line = words[n] + ' ';
+            currentY += 105;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, width / 2, currentY);
+        currentY += 120;
+      }
+
+      // French Translation
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '600 42px "Plus Jakarta Sans", sans-serif';
+      const transWords = currentItem.translation.split(' ');
+      let transLine = '';
+      for (let n = 0; n < transWords.length; n++) {
+        const testLine = transLine + transWords[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > width - 240 && n > 0) {
+          ctx.fillText(transLine, width / 2, currentY);
+          transLine = transWords[n] + ' ';
+          currentY += 65;
+        } else {
+          transLine = testLine;
+        }
+      }
+      ctx.fillText(transLine, width / 2, currentY);
+      currentY += 95;
+
+      // Source Badge
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = 'italic 32px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(`— ${currentItem.source} —`, width / 2, currentY);
+
+      // Footer
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.font = '26px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText('تطبيق SAJADA BESSAFI · مواقيت صلاة وقصص دينية', width / 2, height - 120);
+
+      // Convert to image download
+      const dataUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = dataUrl;
+      downloadLink.download = `sajada-bessafi-story-${Date.now()}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      setDownloadToast('تم تنزيل الصورة الدينية بنجاح في معرض هاتفك 📥');
+      setTimeout(() => setDownloadToast(null), 3500);
+    } catch {
+      // Fallback
+      if (currentItem.image) {
+        const a = document.createElement('a');
+        a.href = currentItem.image;
+        a.download = `sajada-bessafi-${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setDownloadToast('تم بدء تنزيل الصورة 📥');
+      setTimeout(() => setDownloadToast(null), 3500);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -211,7 +388,21 @@ export default function StoryModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-white">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-white">
+              <button
+                onClick={handleDownloadStoryImage}
+                disabled={isDownloading}
+                className="p-1.5 rounded-full bg-emerald-600/80 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1 px-2.5"
+                title="تنزيل الصورة الدينية إلى معرض الهاتف"
+                aria-label="تنزيل الصورة الدينية"
+              >
+                {isDownloading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span className="text-[11px] font-semibold hidden sm:inline">تنزيل</span>
+              </button>
               <button
                 onClick={handleToggleAudio}
                 className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
@@ -236,6 +427,14 @@ export default function StoryModal({
             </div>
           </div>
         </div>
+
+        {/* Floating Download Toast */}
+        {downloadToast && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-emerald-600 text-white text-xs px-4 py-2 rounded-full shadow-xl backdrop-blur-md flex items-center gap-2 border border-emerald-400/50 animate-bounce">
+            <Check className="w-4 h-4 text-white stroke-[3]" />
+            <span>{downloadToast}</span>
+          </div>
+        )}
 
         {/* TAP NAVIGATION ZONES (Left / Right) & Double Tap Detection */}
         <div
@@ -337,6 +536,20 @@ export default function StoryModal({
               <Bookmark
                 className={`w-6 h-6 ${isSaved ? 'text-amber-400 fill-amber-400' : 'text-white'}`}
               />
+            </button>
+
+            <button
+              onClick={handleDownloadStoryImage}
+              disabled={isDownloading}
+              className="p-2 text-emerald-400 hover:text-emerald-300 hover:scale-110 active:scale-95 transition-transform"
+              aria-label="تنزيل الصورة الدينية إلى معرض هاتفي"
+              title="تنزيل الصورة الدينية إلى معرض الهاتف"
+            >
+              {isDownloading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+              ) : (
+                <Download className="w-6 h-6" />
+              )}
             </button>
 
             <button
