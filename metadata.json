@@ -1,0 +1,6 @@
+{
+  "name": "Sajda Feed",
+  "description": "L'expérience spirituelle réinventée : flux de rappels inspiré des stories et feed Instagram, horaires de prière précis, qibla et adhkar.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
